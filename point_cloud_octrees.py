@@ -9,9 +9,9 @@ import numpy as np
 import open3d as o3d
 import time
 import numba as nb
+from itertools import product
 
 # nb.jit(parallel=True, fastmath=True)
-print("Number of threads: %s" % nb.get_num_threads())
 
 
 """ Opening and vizualization of the point cloud """
@@ -38,21 +38,17 @@ print("Number of points of the resampled cloud:", len(pc_rs.points))
 xyz = np.asarray(pc_rs.points)
 rgb = np.asarray(pc_rs.colors)
 
-xyzmin = np.min(xyz,axis=0)
-xyzmax = np.max(xyz,axis=0)
-min_x, min_y, min_z = xyzmin[0], xyzmin[1], xyzmin[2] 
-max_x, max_y, max_z = xyzmax[0], xyzmax[1], xyzmax[2] 
+""" Compute octrees and fill eacch octree with its corresponding points """
+
+xyzmin, xyzmax = np.min(xyz,axis=0), np.max(xyz,axis=0)
+min_x, min_y, min_z, max_x, max_y, max_z = xyzmin[0], xyzmin[1], xyzmin[2], xyzmax[0], xyzmax[1], xyzmax[2]
 x_range, y_range, z_range = max_x - min_x, max_y - min_y, max_z - min_z
 num_levels_octree = 5
 grid_size = x_range/(2**num_levels_octree)
 x_idx, y_idx, z_idx = int(max(1, np.ceil(x_range/grid_size))), int(max(1, np.ceil(y_range/grid_size))), int(max(1, np.ceil(z_range/grid_size)))
-num_voxels = x_idx * y_idx * z_idx
-print("Number of voxels:", num_voxels)
-
 nodes_ini = np.array([[[min_x+grid_size*i, min_y+grid_size*j, min_z+grid_size*k], [min_x+grid_size*(i+1), min_y+grid_size*(j+1), min_z+grid_size*(k+1)]] for i in range(x_idx) for j in range(y_idx) for k in range(z_idx)])
-xyz = np.asarray(pc_rs.points)
 
-@nb.jit(parallel=True)
+@nb.jit(parallel=True, fastmath=True)
 def compute_nodes_points(xyz, nodes_ini):
     nodes = []
     nodes_points = []
@@ -67,6 +63,9 @@ def compute_nodes_points(xyz, nodes_ini):
     return nodes, nodes_points
 
 nodes, nodes_points = compute_nodes_points(xyz, nodes_ini)
+print("Number of octrees:", len(nodes))
+
+""" Plot with Open3D """
 
 mat_line_set = []
 for j in range(len(nodes)):
@@ -81,6 +80,6 @@ for j in range(len(nodes)):
     line_set.colors = o3d.utility.Vector3dVector(colors)
     mat_line_set.append(line_set)
     
-print("Time execution full process: %s seconds ---" % round(time.time() - start_time)) 
+print("Time execution simulation: %s seconds ---" % round(time.time() - start_time)) 
 
 o3d.visualization.draw_geometries([pc_rs]+[mat_line_set[i] for i in range(len(mat_line_set))])
